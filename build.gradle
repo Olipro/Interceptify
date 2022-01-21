@@ -1,0 +1,106 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'jacoco'
+    id "org.sonarqube" version "3.3"
+    id "org.ajoberstar.grgit" version "4.1.1"
+}
+
+group 'net.uptheinter'
+version grgit.describe().replace('v', '')
+
+compileJava {
+    options.release = 12
+    options.compilerArgs << '-Xlint:unchecked'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+test {
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+    }
+}
+
+sonarqube {
+    properties {
+        property "sonar.projectKey", "Olipro_Interceptify"
+        property "sonar.organization", "olipro"
+        property "sonar.host.url", "https://sonarcloud.io"
+        property "sonar.junit.reportPaths", "build/test-results/test"
+        property "sonar.projectVersion", project.version.toString()
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/Olipro/Interceptify"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                description = 'A library for runtime java code interception'
+                url = 'https://github.com/Olipro/Interceptify'
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'Olipro'
+                        name = 'Oliver S.'
+                        email = 'olipro@uptheinter.net'
+                    }
+                }
+            }
+        }
+    }
+}
+
+javadoc {
+    options.addBooleanOption('html5', true)
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'net.bytebuddy', name: 'byte-buddy', version: '1.12.7'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '4.2.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes('Premain-Class' : 'net.uptheinter.interceptify.Main',
+                   'Agent-Class' : 'net.uptheinter.interceptify.Main',
+                   'Can-Redefine-Classes': 'true',
+                   'Can-Retransform-Classes': 'true',
+                   'Can-Set-Native-Method-Prefix' : 'true',
+                  )
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

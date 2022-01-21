@@ -1,0 +1,17 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  Release:
+    name: Execute Release Workflow
+    if: ${{ !contains(github.event.head_commit.message, '[CI Skip]') }}
+    uses: Olipro/Interceptify/.github/workflows/ci.yml@github
+    with:
+      isRelease: true
+    secrets:
+      GITHUBTOKEN: ${{secrets.GITHUB_TOKEN}}
+      SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+
