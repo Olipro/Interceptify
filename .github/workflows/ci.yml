@@ -1,0 +1,101 @@
+name: CI Master Script
+
+on:
+  workflow_call:
+    inputs:
+      isRelease:
+        required: true
+        type: boolean
+      isPR:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      GITHUBTOKEN:
+        required: true
+      OSSRH_USER:
+        required: true
+      OSSRH_PASS:
+        required: true
+      OSSRH_KEY:
+        required: true
+      OSSRH_KEYPASS:
+        required: true
+
+jobs:
+  Primary-Pipeline:
+    environment: Standard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{github.ref}}
+          fetch-depth: '0'
+      - name: Install JDK
+        uses: actions/setup-java@v2.5.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Validate Gradle
+        uses: gradle/wrapper-validation-action@v1.0.4
+      - name: Build Interceptify
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: build sonarqube --info
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUBTOKEN }}
+           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Test Interceptify
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: test
+      - name: Build JavaDoc
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: javadoc
+      - name: Code Coverage
+        uses: codecov/codecov-action@v2.1.0
+        with:
+          directory: build/
+          flags: unittests
+          fail_ci_if_error: true
+          verbose: true
+      - name: Generate Javadoc
+        if: ${{inputs.isRelease || github.ref_name == github.event.repository.default_branch}}
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: javadoc
+      - name: Publish Release Package
+        if: ${{inputs.isRelease && !inputs.isPR}}
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: publish
+        env:
+          OSSRH_USER: ${{secrets.OSSRH_USER}}
+          OSSRH_PASS: ${{secrets.OSSRH_PASS}}
+          OSSRH_KEY: ${{secrets.OSSRH_KEY}}
+          OSSRH_KEYPASS: ${{secrets.OSSRH_KEYPASS}}
+          IS_RELEASE: '1'
+      - name: Publish Snapshot Package
+        if: ${{!inputs.isPR && !inputs.isRelease && github.ref_name == github.event.repository.default_branch}}
+        uses: gradle/gradle-build-action@v2.1.0
+        with:
+          arguments: publish
+        env:
+          OSSRH_USER: ${{secrets.OSSRH_USER}}
+          OSSRH_PASS: ${{secrets.OSSRH_PASS}}
+          OSSRH_KEY: ${{secrets.OSSRH_KEY}}
+          OSSRH_KEYPASS: ${{secrets.OSSRH_KEYPASS}}
+      - name: Publish Javadoc
+        if: ${{inputs.isRelease}}
+        uses: crazy-max/ghaction-github-pages@v2.6.0
+        with:
+          target_branch: javadoc
+          build_dir: build/docs/javadoc
+          commit_message: Javadoc published for ${{github.ref_name}}
+          keep_history: true
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUBTOKEN}}
