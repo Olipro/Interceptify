@@ -1,6 +1,7 @@
 [![Snapshot Pipeline](https://github.com/Olipro/Interceptify/actions/workflows/snapshot.yml/badge.svg?branch=master)](https://github.com/Olipro/Interceptify/actions/workflows/snapshot.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Olipro_Interceptify&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Olipro_Interceptify)
 [![codecov](https://codecov.io/gh/Olipro/Interceptify/branch/master/graph/badge.svg?token=9FBTJVGC2T)](https://codecov.io/gh/Olipro/Interceptify)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.uptheinter/interceptify/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.uptheinter/interceptify)
 # Interceptify
 
 This library is designed to provide a convenient and simple means of performing runtime interception of Java methods/constructors.
