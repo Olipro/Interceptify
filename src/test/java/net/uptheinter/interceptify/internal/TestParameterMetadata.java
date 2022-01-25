@@ -47,9 +47,18 @@ class TestParameterMetadata {
     void testEquals() {
         when(mockParam.getType().getTypeName())
                 .thenReturn("first", "first", "second", "secondWrong");
-        assertTrue(paramMeta.equals(paramMeta));
+        //noinspection ConstantConditions
+        assertTrue(paramMeta.equals((Object)paramMeta));
         assertFalse(paramMeta.equals(paramMeta));
-        assertNotEquals(paramMeta, new Object());
+        //noinspection SimplifiableAssertion
+        assertFalse(paramMeta.equals(new Object()));
+    }
+
+    @Test
+    void testHashCode() {
+        when(mockParam.getType().getTypeName())
+                .thenReturn("staticString");
+        assertEquals(paramMeta.hashCode(), "staticString".hashCode());
     }
 
     @Test

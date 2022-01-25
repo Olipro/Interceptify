@@ -46,7 +46,7 @@ public final class Util {
     public static Stream<Path> walk(Path path, int depth) {
         try {
             return Files.walk(path, depth);
-        } catch (IOException e) {
+        } catch (Exception e) {
             DebugError(e);
         }
         return null;

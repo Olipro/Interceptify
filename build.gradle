@@ -121,8 +121,8 @@ dependencies {
 
 tasks.named('jar') {
     manifest {
-        attributes('Premain-Class' : 'net.uptheinter.interceptify.Main',
-                   'Agent-Class' : 'net.uptheinter.interceptify.Main',
+        attributes('Premain-Class' : 'net.uptheinter.interceptify.EntryPoint',
+                   'Agent-Class' : 'net.uptheinter.interceptify.EntryPoint',
                    'Can-Redefine-Classes': 'true',
                    'Can-Retransform-Classes': 'true',
                    'Can-Set-Native-Method-Prefix' : 'true',
