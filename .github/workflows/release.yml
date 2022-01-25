@@ -14,4 +14,8 @@ jobs:
     secrets:
       GITHUBTOKEN: ${{secrets.GITHUB_TOKEN}}
       SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+      OSSRH_USER: ${{secrets.OSSRH_USER}}
+      OSSRH_PASS: ${{secrets.OSSRH_PASS}}
+      OSSRH_KEY: ${{secrets.OSSRH_KEY}}
+      OSSRH_KEYPASS: ${{secrets.OSSRH_KEYPASS}}
 

@@ -1,13 +1,24 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
     id 'jacoco'
     id "org.sonarqube" version "3.3"
     id "org.ajoberstar.grgit" version "4.1.1"
 }
 
+ext.isRelease = System.getenv('IS_RELEASE') != null
+def getSonatypeURL() {
+    return ext.isRelease ?
+            "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/" :
+            "https://s01.oss.sonatype.org/content/repositories/snapshots/";
+}
+def calcVersion() {
+    return ext.isRelease ? grgit.describe().replace('v', '') : 'SNAPSHOT'
+}
+
 group 'net.uptheinter'
-version grgit.describe().replace('v', '')
+version calcVersion()
 
 compileJava {
     options.release = 12
@@ -35,7 +46,6 @@ sonarqube {
         property "sonar.projectKey", "Olipro_Interceptify"
         property "sonar.organization", "olipro"
         property "sonar.host.url", "https://sonarcloud.io"
-        property "sonar.junit.reportPaths", "build/test-results/test"
         property "sonar.projectVersion", project.version.toString()
     }
 }
@@ -43,11 +53,10 @@ sonarqube {
 publishing {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/Olipro/Interceptify"
+            url = getSonatypeURL()
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                username = System.getenv("OSSRH_USER")
+                password = System.getenv("OSSRH_PASS")
             }
         }
     }
@@ -55,6 +64,8 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             pom {
+                name = project.name
+                packaging = 'pom'
                 description = 'A library for runtime java code interception'
                 url = 'https://github.com/Olipro/Interceptify'
                 licenses {
@@ -63,6 +74,13 @@ publishing {
                         url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
                     }
                 }
+                distributionManagement {
+                    downloadUrl = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2'
+                }
+                issueManagement {
+                    system = "github.com"
+                    url = "https://github.com/Olipro/Interceptify/issues"
+                }
                 developers {
                     developer {
                         id = 'Olipro'
@@ -70,9 +88,20 @@ publishing {
                         email = 'olipro@uptheinter.net'
                     }
                 }
+                scm {
+                    connection = 'scm:git:https://github.com/Olipro/Interceptify.git'
+                    developerConnection = 'scm:git:https://github.com/Olipro/Interceptify.git'
+                    url = 'https://github.com/Olipro/Interceptify'
+                    tag = System.getenv('IS_RELEASE') == null ? 'HEAD' : grgit.describe()
+                }
             }
         }
     }
+}
+
+signing {
+    sign publishing.publications.mavenJava
+    useInMemoryPgpKeys(System.getenv("OSSRH_KEY"), System.getenv("OSSRH_KEYPASS"))
 }
 
 javadoc {
