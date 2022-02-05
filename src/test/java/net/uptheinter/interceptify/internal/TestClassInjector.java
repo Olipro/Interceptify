@@ -1,6 +1,10 @@
 package net.uptheinter.interceptify.internal;
 
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.modifier.Ownership;
+import net.bytebuddy.description.modifier.TypeManifestation;
+import net.bytebuddy.description.modifier.Visibility;
+import net.bytebuddy.dynamic.loading.ByteArrayClassLoader;
 import net.bytebuddy.implementation.MethodCall;
 import net.uptheinter.interceptify.annotations.InterceptClass;
 import net.uptheinter.interceptify.annotations.OverwriteConstructor;
@@ -14,11 +18,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -43,11 +51,15 @@ public class TestClassInjector {
     @Mock(answer = RETURNS_DEEP_STUBS) Stream<JarFileEx> mockStrm;
     @Mock Stream<Object> mockStrm2;
     final URL[] mockUrl = new URL[0];
+    final ByteBuddy bb = new ByteBuddy();
     ClassInjector classInjector;
+    Path tmp;
 
     @BeforeEach
-    void Init() {
-        classInjector = new ClassInjector(mockBb, mockInstr, mockUrl);
+    void Init() throws IOException {
+        classInjector = new ClassInjector(mockBb, mockInstr).setClassPath(mockUrl);
+        tmp = Files.createTempDirectory("tmp");
+        tmp.toFile().deleteOnExit();
     }
 
     @Test
@@ -97,9 +109,7 @@ public class TestClassInjector {
 
     @Test
     void applyAnnotationsAndIntercept() throws Throwable {
-        var tmp = Files.createTempDirectory("tmp");
         var jarFile = tmp.resolve("test.jar").toFile();
-        var bb = new ByteBuddy();
         var target = bb.subclass(Object.class)
                 .name("foo.Interceptee")
                 .modifiers(Modifier.PUBLIC)
@@ -138,15 +148,104 @@ public class TestClassInjector {
             jar.putNextEntry(new ZipEntry("foo/Interceptee.class"));
             jar.write(interceptee);
         }
-        var ci = new ClassInjector(bb, null, new URL[]{jarFile.toURI().toURL()});
+
+        classInjector = new ClassInjector(bb, mockInstr)
+                .setClassPath(new URL[]{jarFile.toURI().toURL()});
         var jf = new JarFiles();
         jf.addFromDirectory(tmp);
-        ci.collectMetadataFrom(jf).applyAnnotationsAndIntercept();
+        classInjector.collectMetadataFrom(jf).applyAnnotationsAndIntercept();
         var cls = Class.forName("foo.Interceptee");
         var inst = cls.getDeclaredConstructor(int.class).newInstance(5);
         var result = (int)cls.getDeclaredMethod("func", int.class)
                 .invoke(inst, 3);
         assertEquals(8, result);
         assertTrue(success);
+    }
+
+    @SuppressWarnings({"SameReturnValue", "unused"})
+    private abstract static class toMakePublic {
+        public static final String x = "";
+        private transient volatile char y;
+
+        private static synchronized strictfp boolean a(int x, String y) {
+            return true;
+        }
+
+        public native final int b(char x, int... y);
+
+        protected abstract void c();
+    }
+
+    @Test
+    void testClassIsMadePublic() throws Exception {
+        String name = "bar.MakePublic";
+        var cls = bb.redefine(toMakePublic.class)
+                .name(name)
+                .modifiers(Ownership.MEMBER, TypeManifestation.ABSTRACT, Visibility.PRIVATE)
+                .noNestMate()
+                .make()
+                .getBytes();
+        var arr = new ClassInjector(bb, mockInstr)
+                .setClassPath(mockUrl)
+                .defineMakePublicList(new HashSet<>() {{
+            add(name);
+        }})
+                .transform(null,
+                ClassLoader.getSystemClassLoader(),
+                name,
+                null,
+                null, cls);
+        var madePublic = new ByteArrayClassLoader(ClassLoader.getSystemClassLoader(),
+                new HashMap<>(){{put(name, arr);}})
+                .loadClass(name);
+        var modifiers = madePublic.getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.ABSTRACT, modifiers);
+        modifiers = madePublic.getDeclaredMethod("a", int.class, String.class).getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.STATIC | Modifier.SYNCHRONIZED | Modifier.STRICT, modifiers);
+        modifiers = madePublic.getDeclaredMethod("b", char.class, int[].class).getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.NATIVE | Modifier.TRANSIENT, modifiers);
+        modifiers = madePublic.getDeclaredMethod("c").getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.ABSTRACT, modifiers);
+        modifiers = madePublic.getDeclaredField("x").getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL, modifiers);
+        modifiers = madePublic.getDeclaredField("y").getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.VOLATILE | Modifier.TRANSIENT, modifiers);
+    }
+
+    @SuppressWarnings({"unused", "SameReturnValue"})
+    private interface toMakePublic2 {
+        default int x() {
+            return 0;
+        }
+    }
+
+    @Test
+    void testInterfaceIsMadePublic() throws Exception {
+        String name = "bar.MakePublic2";
+        var cls = bb.redefine(toMakePublic2.class)
+                .name(name)
+                .modifiers(Ownership.MEMBER, TypeManifestation.INTERFACE, Visibility.PRIVATE)
+                .noNestMate()
+                .make()
+                .getBytes();
+        var arr = new ClassInjector(bb, mockInstr)
+                .setClassPath(mockUrl)
+                .defineMakePublicList(new HashSet<>() {{
+                    add(name);
+                }})
+                .transform(null,
+                        ClassLoader.getSystemClassLoader(),
+                        name,
+                        null,
+                        null, cls);
+        var madePublic = new ByteArrayClassLoader(ClassLoader.getSystemClassLoader(),
+                new HashMap<>() {{
+                    put(name, arr);
+                }})
+                .loadClass(name);
+        var modifiers = madePublic.getModifiers();
+        assertEquals(Modifier.PUBLIC | Modifier.INTERFACE | Modifier.ABSTRACT, modifiers);
+        modifiers = madePublic.getDeclaredMethod("x").getModifiers();
+        assertEquals(Modifier.PUBLIC, modifiers);
     }
 }

@@ -14,7 +14,7 @@ There is no API in the traditional sense, just a few annotations and a single in
 This annotation requires you to provide the fully-qualified name of the class you want to intercept. It should be applied to your class that has the methods that will be doing the interception.
 
 ### `@OverwriteMethod("[target]")`
-This annotation applies to your intercepting method and is used to determine which method of the target class it intends to intercept. You method can provide a parameter that receives the original method which can be called (or not) as you desire. If the intercepted method is not static, you can also receive a parameter for the instance.
+This annotation applies to your intercepting method and is used to determine which method of the target class it intends to intercept. Your method can provide a parameter that receives the original method which can be called (or not) as you desire. If the intercepted method is not static, you can also receive a parameter for the instance.
 
 ### `@OverwriteConstructor(before = false, after = true)`
 

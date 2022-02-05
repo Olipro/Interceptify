@@ -4,8 +4,10 @@ import net.uptheinter.interceptify.util.JarFiles;
 import net.uptheinter.interceptify.util.Util;
 
 import java.net.URL;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -21,7 +23,6 @@ public interface StartupConfig {
      * @return the {@link JarFiles} to be processed.
      */
     JarFiles getJarFilesToInject();
-
 
     /**
      * This should return a {@link List} of URLs to be included in a "fake"
@@ -47,4 +48,17 @@ public interface StartupConfig {
      * @return The true main() function of the intercepted application
      */
     Consumer<String[]> getRealMain();
+
+    /**
+     * <p>This function should return a set of fully-qualified class names that will
+     * have their fields and methods made public. Note that since Java loads sub-classes
+     * as their own file, you should add references to those separately too - e.g.
+     * {@code Class$SubClass}</p>
+     * <p>To have any effect, the class must not have been loaded yet.</p>
+     * <p>The default interface method returns an empty set and does nothing.</p>
+     * @return A Set of fully-qualified class names to make public.
+     */
+    default Set<String> makePublic() {
+        return new HashSet<>(0);
+    }
 }

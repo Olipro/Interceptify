@@ -14,7 +14,7 @@ import java.net.URL;
  * of facilitating Java Agent functionality in the future.
  */
 public final class RuntimeHook {
-    private static Instrumentation instr;
+    private static ClassInjector ci;
 
     private RuntimeHook() {}
 
@@ -25,16 +25,13 @@ public final class RuntimeHook {
      * @param cfg an implementation of a {@code StartupConfig}
      */
     public static void init(StartupConfig cfg) {
-        if (instr == null) {
-            System.err.println("Error, JVM was not invoked with Interceptify " +
-                    "as a Java Agent (see -javaagent). Terminating");
-            return;
-        }
         JarFiles jarFiles = cfg.getJarFilesToInject();
         URL[] classpaths = cfg.getClasspaths().toArray(URL[]::new);
-        new ClassInjector(new ByteBuddy(), instr, classpaths)
-                .collectMetadataFrom(jarFiles)
-                .applyAnnotationsAndIntercept();
+        ci
+            .setClassPath(classpaths)
+            .defineMakePublicList(cfg.makePublic())
+            .collectMetadataFrom(jarFiles)
+            .applyAnnotationsAndIntercept();
     }
 
     /**
@@ -46,6 +43,6 @@ public final class RuntimeHook {
      */
     @SuppressWarnings("unused")
     public static void premain(String args, Instrumentation instr) {
-        RuntimeHook.instr = instr;
+        ci = new ClassInjector(new ByteBuddy(), instr);
     }
 }

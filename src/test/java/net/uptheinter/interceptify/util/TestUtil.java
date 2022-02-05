@@ -1,30 +1,23 @@
 package net.uptheinter.interceptify.util;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
 import java.io.PrintStream;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestUtil {
-    PrintStream oldErr = System.err;
-    ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    PrintStream rdr = new PrintStream(buf);
+    final PrintStream oldErr = System.err;
+    final ByteArrayOutputStream buf = new ByteArrayOutputStream();
+    final PrintStream rdr = new PrintStream(buf);
 
     TestUtil() {
         System.setErr(rdr);

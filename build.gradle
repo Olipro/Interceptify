@@ -7,27 +7,17 @@ plugins {
     id "org.ajoberstar.grgit" version "4.1.1"
 }
 
-ext.isRelease = System.getenv('IS_RELEASE') != null
-def getSonatypeURL() {
-    return ext.isRelease ?
-            "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/" :
-            "https://s01.oss.sonatype.org/content/repositories/snapshots/";
-}
-def calcVersion() {
-    return ext.isRelease ? grgit.describe().replace('v', '') : 'SNAPSHOT'
-}
+def isRelease = System.getenv('IS_RELEASE') != null
 
 group 'net.uptheinter'
-version calcVersion()
-
-compileJava {
-    options.release = 12
-    options.compilerArgs << '-Xlint:unchecked'
-}
+version isRelease ? grgit.describe().replace('v', '') : 'SNAPSHOT'
 
 java {
     withJavadocJar()
     withSourcesJar()
+    toolchain {
+        sourceCompatibility = JavaLanguageVersion.of(11)
+    }
 }
 
 test {
@@ -51,9 +41,12 @@ sonarqube {
 }
 
 publishing {
+    def sonatypeUrl = isRelease ?
+            'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/' :
+            'https://s01.oss.sonatype.org/content/repositories/snapshots/'
     repositories {
         maven {
-            url = getSonatypeURL()
+            url = sonatypeUrl
             credentials {
                 username = System.getenv("OSSRH_USER")
                 password = System.getenv("OSSRH_PASS")
@@ -61,7 +54,8 @@ publishing {
         }
     }
     publications {
-        mavenJava(MavenPublication) {
+        mavenCentral(MavenPublication) {
+            artifactId = 'interceptify'
             from components.java
             pom {
                 name = project.name
@@ -75,7 +69,7 @@ publishing {
                     }
                 }
                 distributionManagement {
-                    downloadUrl = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2'
+                    downloadUrl = sonatypeUrl
                 }
                 issueManagement {
                     system = "github.com"
@@ -87,6 +81,10 @@ publishing {
                         name = 'Oliver S.'
                         email = 'olipro@uptheinter.net'
                     }
+                }
+                ciManagement {
+                    system = 'GitHub'
+                    url = 'https://github.com/Olipro/Interceptify/actions/workflows/release.yml'
                 }
                 scm {
                     connection = 'scm:git:https://github.com/Olipro/Interceptify.git'
@@ -100,7 +98,7 @@ publishing {
 }
 
 signing {
-    sign publishing.publications.mavenJava
+    sign publishing.publications.mavenCentral
     useInMemoryPgpKeys(System.getenv("OSSRH_KEY"), System.getenv("OSSRH_KEYPASS"))
 }
 

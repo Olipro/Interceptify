@@ -1,6 +1,5 @@
 package net.uptheinter.interceptify.util;
 
-import java.io.IOException;
 import java.net.URL;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
@@ -38,7 +37,7 @@ public final class Util {
     }
 
     /**
-     * It's Files.walk, but it catches exceptions and logs them.
+     * It's {@link Files#walk}, but it catches exceptions and logs them.
      * @param path same as for {@link Files#walk(Path, int, FileVisitOption...)}
      * @param depth ditto.
      * @return the return value also has the same semantics.

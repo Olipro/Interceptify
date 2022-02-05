@@ -60,9 +60,9 @@ public class AutoCloser<T> implements AutoCloseable {
     @Override
     @SuppressWarnings("unchecked") // remove when on JRE16
     public final void close() {
-        if (closer instanceof Consumer)
-            ((Consumer<T>)closer).accept(obj);
-        else if (closer instanceof Runnable)
+        if (closer instanceof Runnable)
             ((Runnable)closer).run();
+        else if (closer instanceof Consumer)
+            ((Consumer<T>)closer).accept(obj);
     }
 }
