@@ -2,14 +2,14 @@ name: Snapshot Pipeline
 
 on:
   push:
-    branches-ignore: ['github', 'javadoc']
+    branches: [$default-branch]
     tags-ignore: ['*']
   workflow_dispatch:
 
 jobs:
   Snapshot:
     name: Execute Snapshot Workflow
-    if: ${{ !contains(github.event.head_commit.message, '[CI Skip]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[CI Skip]') && github.event_name != 'pull_request' }}
     uses: Olipro/Interceptify/.github/workflows/ci.yml@github
     with:
       isRelease: false

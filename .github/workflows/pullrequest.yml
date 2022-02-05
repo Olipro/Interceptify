@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  Snapshot:
-    name: Execute Snapshot Workflow
+  PR:
+    name: Execute Pull Request Workflow
     if: ${{ !contains(github.event.head_commit.message, '[CI Skip]') }}
     uses: Olipro/Interceptify/.github/workflows/ci.yml@github
     with:
@@ -16,4 +16,8 @@ jobs:
     secrets:
       GITHUBTOKEN: ${{secrets.GITHUB_TOKEN}}
       SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+      OSSRH_USER: 'null'
+      OSSRH_PASS: 'null'
+      OSSRH_KEY: 'null'
+      OSSRH_KEYPASS: 'null'
 
