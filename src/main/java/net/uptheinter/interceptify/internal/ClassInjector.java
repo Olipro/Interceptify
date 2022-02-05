@@ -242,6 +242,7 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     private void applyModifiersFor(TypeDescription type, List<ModifierContributor> list) {
+        list.add(TypeManifestation.PLAIN);
         if (type.isAnnotation())
             list.add(TypeManifestation.ANNOTATION);
         else if (type.isInterface())
@@ -255,6 +256,7 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     private void applyModifiersFor(MethodDescription method, List<ModifierContributor> list) {
+        list.add(MethodManifestation.PLAIN);
         if (method.isVarArgs())
             list.add(MethodArguments.VARARGS);
         if (method.isStrict())
@@ -271,7 +273,8 @@ class ClassInjector implements ClassFileTransformer {
             list.add(Ownership.STATIC);
     }
 
-    private void applyModifiersFor(FieldDescription field, List<ModifierContributor> list) {
+    private void applyModifiersFor(FieldDescription field, TypeDescription cls, List<ModifierContributor> list) {
+        list.add(FieldManifestation.PLAIN);
         if (field.isVolatile())
             list.add(FieldManifestation.VOLATILE);
         if (field.isSynthetic())
@@ -280,6 +283,16 @@ class ClassInjector implements ClassFileTransformer {
             list.add(FieldPersistence.TRANSIENT);
         if (field.isStatic())
             list.add(Ownership.STATIC);
+        if (cls.isInterface())
+            list.add(FieldManifestation.FINAL);
+    }
+
+    private <R extends ModifierContributor> List<R> getManifestation(FieldDescription obj, TypeDescription cls) {
+        var ret = new ArrayList<ModifierContributor>(6);
+        ret.add(Visibility.PUBLIC);
+        applyModifiersFor(obj, cls, ret);
+        //noinspection unchecked
+        return (List<R>) ret;
     }
 
     private <R extends ModifierContributor, T> List<R> getManifestation(T obj) {
@@ -289,8 +302,6 @@ class ClassInjector implements ClassFileTransformer {
             applyModifiersFor((TypeDescription) obj, ret);
         } else if (obj instanceof MethodDescription) {
             applyModifiersFor((MethodDescription) obj, ret);
-        } else if (obj instanceof FieldDescription) {
-            applyModifiersFor((FieldDescription) obj, ret);
         }
         //noinspection unchecked
         return (List<R>) ret;
@@ -305,7 +316,7 @@ class ClassInjector implements ClassFileTransformer {
                 .forEach(method -> adjust.run(builder -> builder.withMethodModifiers(is(method), getManifestation(method))));
         cls.getDeclaredFields().stream()
                 .filter(field -> !field.isPublic() || field.isFinal())
-                .forEach(field -> adjust.run(builder -> builder.withFieldModifiers(is(field), getManifestation(field))));
+                .forEach(field -> adjust.run(builder -> builder.withFieldModifiers(is(field), getManifestation(field, cls))));
         return byteBuddy.redefine(cls, classFileLocator)
                 .visit(adjust.get())
                 .make().getBytes();
