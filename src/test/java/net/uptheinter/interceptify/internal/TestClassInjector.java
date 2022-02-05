@@ -162,10 +162,11 @@ public class TestClassInjector {
         assertTrue(success);
     }
 
-    @SuppressWarnings({"SameReturnValue", "unused"})
+    @SuppressWarnings({"SameReturnValue", "unused", "EmptyMethod"})
     private abstract static class toMakePublic {
         public static final String x = "";
         private transient volatile char y;
+        protected final int z = 0;
 
         private static synchronized strictfp boolean a(int x, String y) {
             return true;
@@ -174,6 +175,8 @@ public class TestClassInjector {
         public native final int b(char x, int... y);
 
         protected abstract void c();
+
+        protected final void d() {}
     }
 
     @Test
@@ -206,10 +209,14 @@ public class TestClassInjector {
         assertEquals(Modifier.PUBLIC | Modifier.NATIVE | Modifier.TRANSIENT, modifiers);
         modifiers = madePublic.getDeclaredMethod("c").getModifiers();
         assertEquals(Modifier.PUBLIC | Modifier.ABSTRACT, modifiers);
+        modifiers = madePublic.getDeclaredMethod("d").getModifiers();
+        assertEquals(Modifier.PUBLIC, modifiers);
         modifiers = madePublic.getDeclaredField("x").getModifiers();
-        assertEquals(Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL, modifiers);
+        assertEquals(Modifier.PUBLIC | Modifier.STATIC, modifiers);
         modifiers = madePublic.getDeclaredField("y").getModifiers();
         assertEquals(Modifier.PUBLIC | Modifier.VOLATILE | Modifier.TRANSIENT, modifiers);
+        modifiers = madePublic.getDeclaredField("z").getModifiers();
+        assertEquals(Modifier.PUBLIC, modifiers);
     }
 
     @SuppressWarnings({"unused", "SameReturnValue"})
@@ -246,6 +253,41 @@ public class TestClassInjector {
         var modifiers = madePublic.getModifiers();
         assertEquals(Modifier.PUBLIC | Modifier.INTERFACE | Modifier.ABSTRACT, modifiers);
         modifiers = madePublic.getDeclaredMethod("x").getModifiers();
+        assertEquals(Modifier.PUBLIC, modifiers);
+    }
+
+    @SuppressWarnings({"unused", "EmptyMethod"})
+    private static final class toMakePublic3 {
+        void a() {}
+    }
+
+    @Test
+    void testFinalClassIsMadePublic() throws Exception {
+        String name = "bar.MakePublic3";
+        var cls = bb.redefine(toMakePublic3.class)
+                .name(name)
+                .modifiers(Ownership.MEMBER, TypeManifestation.FINAL, Visibility.PRIVATE)
+                .noNestMate()
+                .make()
+                .getBytes();
+        var arr = new ClassInjector(bb, mockInstr)
+                .setClassPath(mockUrl)
+                .defineMakePublicList(new HashSet<>() {{
+                    add(name);
+                }})
+                .transform(null,
+                        ClassLoader.getSystemClassLoader(),
+                        name,
+                        null,
+                        null, cls);
+        var madePublic = new ByteArrayClassLoader(ClassLoader.getSystemClassLoader(),
+                new HashMap<>() {{
+                    put(name, arr);
+                }})
+                .loadClass(name);
+        var modifiers = madePublic.getModifiers();
+        assertEquals(Modifier.PUBLIC, modifiers);
+        modifiers = madePublic.getDeclaredMethod("a").getModifiers();
         assertEquals(Modifier.PUBLIC, modifiers);
     }
 }

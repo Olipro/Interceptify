@@ -242,6 +242,7 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     private void applyModifiersFor(TypeDescription type, List<ModifierContributor> list) {
+        list.add(TypeManifestation.PLAIN);
         if (type.isAnnotation())
             list.add(TypeManifestation.ANNOTATION);
         else if (type.isInterface())
@@ -255,6 +256,7 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     private void applyModifiersFor(MethodDescription method, List<ModifierContributor> list) {
+        list.add(MethodManifestation.PLAIN);
         if (method.isVarArgs())
             list.add(MethodArguments.VARARGS);
         if (method.isStrict())
@@ -272,6 +274,7 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     private void applyModifiersFor(FieldDescription field, List<ModifierContributor> list) {
+        list.add(FieldManifestation.PLAIN);
         if (field.isVolatile())
             list.add(FieldManifestation.VOLATILE);
         if (field.isSynthetic())
