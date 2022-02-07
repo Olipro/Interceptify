@@ -20,7 +20,8 @@ class TestRuntimeHook {
 
     @Test
     void init() throws NoSuchFieldException, IllegalAccessException {
-        RuntimeHook.premain("none", mockInstr);
+        RuntimeHook.premain(null, mockInstr);
+        RuntimeHook.premain("15", mockInstr);
         var ci = RuntimeHook.class.getDeclaredField("ci");
         ci.setAccessible(true);
         ci.set(null, mockInjector);
@@ -29,6 +30,7 @@ class TestRuntimeHook {
         verify(mockConf).getClasspaths();
         verify(mockInjector.setClassPath(any())
                 .defineMakePublicList(any())
+                .defineMakePublicPredicate(any())
                 .collectMetadataFrom(any())).applyAnnotationsAndIntercept();
     }
 }

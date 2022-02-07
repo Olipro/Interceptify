@@ -61,4 +61,20 @@ public interface StartupConfig {
     default Set<String> makePublic() {
         return new HashSet<>(0);
     }
+
+
+    /**
+     * <p>This function should return true if, after examining the string
+     * parameter, you wish to have that particular class made public.
+     * This is a complimentary option to {@link StartupConfig#makePublic()} -
+     * either of these two can be used to make a class public.</p>
+     * <p>This is called whenever a class is loaded.</p>
+     * <p>The default interface method returns an empty set and does nothing.</p>
+     * @param cls The fully-qualified class name - e.g. {@code foo.bar.MyClass}
+     * @return A Set of fully-qualified class names to make public.
+     */
+    @SuppressWarnings("SameReturnValue")
+    default boolean shouldMakePublic(String cls) {
+        return false;
+    }
 }

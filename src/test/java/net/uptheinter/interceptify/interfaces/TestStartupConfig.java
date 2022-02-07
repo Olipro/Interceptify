@@ -29,4 +29,10 @@ class TestStartupConfig {
         when(conf.makePublic()).thenCallRealMethod();
         assertTrue(conf.makePublic().isEmpty());
     }
+
+    @Test
+    void shouldMakePublic() {
+        when(conf.shouldMakePublic(any())).thenCallRealMethod();
+        assertFalse(conf.shouldMakePublic(null));
+    }
 }
