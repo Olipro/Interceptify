@@ -17,6 +17,6 @@ class TestBoxed {
     void set() {
         var boxed = new Boxed<>("astr");
         boxed.set("ing");
-        assertEquals(boxed.get(), "ing");
+        assertEquals("ing", boxed.get());
     }
 }

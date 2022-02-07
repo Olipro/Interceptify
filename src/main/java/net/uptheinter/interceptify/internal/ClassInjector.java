@@ -1,22 +1,6 @@
 package net.uptheinter.interceptify.internal;
 
 import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.asm.ModifierAdjustment;
-import net.bytebuddy.description.field.FieldDescription;
-import net.bytebuddy.description.method.MethodDescription;
-import net.bytebuddy.description.modifier.EnumerationState;
-import net.bytebuddy.description.modifier.FieldManifestation;
-import net.bytebuddy.description.modifier.FieldPersistence;
-import net.bytebuddy.description.modifier.MethodArguments;
-import net.bytebuddy.description.modifier.MethodManifestation;
-import net.bytebuddy.description.modifier.MethodStrictness;
-import net.bytebuddy.description.modifier.ModifierContributor;
-import net.bytebuddy.description.modifier.Ownership;
-import net.bytebuddy.description.modifier.SynchronizationState;
-import net.bytebuddy.description.modifier.SyntheticState;
-import net.bytebuddy.description.modifier.TypeManifestation;
-import net.bytebuddy.description.modifier.Visibility;
-import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.DynamicType.Builder;
 import net.bytebuddy.dynamic.DynamicType.Unloaded;
@@ -33,41 +17,40 @@ import net.uptheinter.interceptify.util.JarEntryEx;
 import net.uptheinter.interceptify.util.JarFileEx;
 import net.uptheinter.interceptify.util.JarFiles;
 
-import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.net.URL;
-import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static net.bytebuddy.implementation.MethodDelegation.to;
-import static net.bytebuddy.matcher.ElementMatchers.is;
 import static net.bytebuddy.matcher.ElementMatchers.namedOneOf;
 import static net.bytebuddy.matcher.ElementMatchers.takesGenericArguments;
 
-class ClassInjector implements ClassFileTransformer {
+class ClassInjector {
     private static final ClassLoader classLoader = ClassInjector.class.getClassLoader();
 
     private final ByteBuddy byteBuddy;
     @SuppressWarnings({"unused", "FieldCanBeLocal"})
     private final Instrumentation instr;
+    private final ClassExposer classExposer;
     private final ClassByteCodeLocator byteCodeLocator = new ClassByteCodeLocator();
     private final TemporaryByteCodeLocator tempCodeLocator = new TemporaryByteCodeLocator();
     private final List<ClassMetadata> classes = new ArrayList<>();
-    private Set<String> toMakePublic;
     private ClassFileLocator classFileLocator;
     private GranularTypePool typePool;
 
     public ClassInjector(ByteBuddy byteBuddy, Instrumentation instr) {
         this.byteBuddy = byteBuddy;
         this.instr = instr;
-        instr.addTransformer(this);
+        this.classExposer = new ClassExposer(byteBuddy, tempCodeLocator, () -> typePool, () -> classFileLocator);
+        instr.addTransformer(classExposer);
     }
 
     public ClassInjector setClassPath(URL[] classPath) {
@@ -82,7 +65,12 @@ class ClassInjector implements ClassFileTransformer {
     }
 
     public ClassInjector defineMakePublicList(Set<String> list) {
-        this.toMakePublic = list;
+        classExposer.defineMakePublicList(list);
+        return this;
+    }
+
+    public ClassInjector defineMakePublicPredicate(Predicate<String> pred) {
+        classExposer.defineMakePublicPredicate(pred);
         return this;
     }
 
@@ -232,98 +220,5 @@ class ClassInjector implements ClassFileTransformer {
 
     private void loadInterceptor(Unloaded<?> interceptor) {
         interceptor.load(classLoader, ClassLoadingStrategy.Default.INJECTION);
-    }
-
-    @Override
-    public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (!toMakePublic.contains(className))
-            return classfileBuffer;
-        return tempCodeLocator.with(className, classfileBuffer, () -> makeAllPublic(className));
-    }
-
-    private void applyModifiersFor(TypeDescription type, List<ModifierContributor> list) {
-        list.add(TypeManifestation.PLAIN);
-        if (type.isAnnotation())
-            list.add(TypeManifestation.ANNOTATION);
-        else if (type.isInterface())
-            list.add(TypeManifestation.INTERFACE);
-        else if (type.isAbstract())
-            list.add(TypeManifestation.ABSTRACT);
-        if (type.isEnum())
-            list.add(EnumerationState.ENUMERATION);
-        if (type.isStatic())
-            list.add(Ownership.STATIC);
-    }
-
-    private void applyModifiersFor(MethodDescription method, List<ModifierContributor> list) {
-        list.add(MethodManifestation.PLAIN);
-        if (method.isVarArgs())
-            list.add(MethodArguments.VARARGS);
-        if (method.isStrict())
-            list.add(MethodStrictness.STRICT);
-        if (method.isAbstract())
-            list.add(MethodManifestation.ABSTRACT);
-        if (method.isNative())
-            list.add(MethodManifestation.NATIVE);
-        if (method.isBridge())
-            list.add(MethodManifestation.BRIDGE);
-        if (method.isSynchronized())
-            list.add(SynchronizationState.SYNCHRONIZED);
-        if (method.isStatic())
-            list.add(Ownership.STATIC);
-    }
-
-    private void applyModifiersFor(FieldDescription field, TypeDescription cls, List<ModifierContributor> list) {
-        list.add(FieldManifestation.PLAIN);
-        if (field.isVolatile())
-            list.add(FieldManifestation.VOLATILE);
-        if (field.isSynthetic())
-            list.add(SyntheticState.SYNTHETIC);
-        if (field.isTransient())
-            list.add(FieldPersistence.TRANSIENT);
-        if (field.isStatic())
-            list.add(Ownership.STATIC);
-        if (cls.isInterface())
-            list.add(FieldManifestation.FINAL);
-    }
-
-    private <R extends ModifierContributor> List<R> getManifestation(FieldDescription obj, TypeDescription cls) {
-        var ret = new ArrayList<ModifierContributor>(6);
-        ret.add(Visibility.PUBLIC);
-        applyModifiersFor(obj, cls, ret);
-        //noinspection unchecked
-        return (List<R>) ret;
-    }
-
-    private <R extends ModifierContributor, T> List<R> getManifestation(T obj) {
-        var ret = new ArrayList<ModifierContributor>(6);
-        ret.add(Visibility.PUBLIC);
-        if (obj instanceof TypeDescription) {
-            applyModifiersFor((TypeDescription) obj, ret);
-        } else if (obj instanceof MethodDescription) {
-            applyModifiersFor((MethodDescription) obj, ret);
-        }
-        //noinspection unchecked
-        return (List<R>) ret;
-    }
-
-    private byte[] makeAllPublic(String className) {
-        var cls = typePool.describe(className).resolve();
-        var adjust = new Boxed<>(new ModifierAdjustment());
-        adjust.run(builder -> builder.withTypeModifiers(getManifestation(cls)));
-        cls.getDeclaredMethods().stream()
-                .filter(method -> !method.isPublic() || method.isFinal())
-                .forEach(method -> adjust.run(builder -> builder.withMethodModifiers(is(method), getManifestation(method))));
-        cls.getDeclaredFields().stream()
-                .filter(field -> !field.isPublic() || field.isFinal())
-                .forEach(field -> adjust.run(builder -> builder.withFieldModifiers(is(field), getManifestation(field, cls))));
-        return byteBuddy.redefine(cls, classFileLocator)
-                .visit(adjust.get())
-                .make().getBytes();
-    }
-
-    @Override
-    public byte[] transform(Module module, ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        return transform(loader, className, classBeingRedefined, protectionDomain, classfileBuffer);
     }
 }
