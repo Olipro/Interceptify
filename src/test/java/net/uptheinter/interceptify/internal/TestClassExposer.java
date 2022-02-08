@@ -7,7 +7,6 @@ import net.bytebuddy.description.modifier.TypeManifestation;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.loading.ByteArrayClassLoader;
-import net.bytebuddy.pool.TypePool;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,12 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 class TestClassExposer {
-    final TemporaryByteCodeLocator tempCodeLocator = new TemporaryByteCodeLocator();
+    final ClassByteCodeLocator dummyLocator = new ClassByteCodeLocator();
     final ClassFileLocator locator = new ClassFileLocator.Compound(
-            tempCodeLocator,
-            ClassFileLocator.ForClassLoader.ofSystemLoader()
+            dummyLocator,
+            ClassFileLocator.ForClassLoader.of(getClass().getClassLoader())
     );
-    final TypePool typePool = GranularTypePool.of(locator);
+    final GranularTypePool typePool = GranularTypePool.of(locator);
     final ByteBuddy bb = new ByteBuddy();
 
     @SuppressWarnings({"SameReturnValue", "unused", "EmptyMethod"})
@@ -56,7 +55,7 @@ class TestClassExposer {
                 .noNestMate()
                 .make()
                 .getBytes();
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
                 .defineMakePublicList(new HashSet<>() {{
                     add(name);
                 }})
@@ -103,7 +102,7 @@ class TestClassExposer {
                 .noNestMate()
                 .make()
                 .getBytes();
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
                 .defineMakePublicPredicate(name::equals)
                 .transform(null,
                         ClassLoader.getSystemClassLoader(),
@@ -135,12 +134,12 @@ class TestClassExposer {
                 .noNestMate()
                 .make()
                 .getBytes();
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
                 .defineMakePublicList(new HashSet<>() {{
                     add(name);
                 }})
                 .transform(null,
-                        ClassLoader.getSystemClassLoader(),
+                        getClass().getClassLoader(),
                         name,
                         null,
                         null, cls);
@@ -168,17 +167,17 @@ class TestClassExposer {
     @Test
     void testEnumIsMadePublic() throws Exception {
         String name = "bar.MakePublic4";
-        var cls = bb.redefine(toMakePublic4.class)
+        var type = bb.redefine(toMakePublic4.class)
                 .name(name)
                 .modifiers(Ownership.MEMBER, EnumerationState.ENUMERATION, Visibility.PRIVATE)
                 .noNestMate()
-                .make()
-                .getBytes();
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
-                .defineMakePublicPredicate(name::equals)
+                .make();
+        var cls = type.getBytes();
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
+                .defineMakePublicPredicate(s -> true)
                 .transform(null,
-                        ClassLoader.getSystemClassLoader(),
-                        name,
+                        getClass().getClassLoader(),
+                        type.getTypeDescription().getTypeName().replace('.', '/'),
                         null,
                         null, cls);
         var madePublic = new ByteArrayClassLoader(ClassLoader.getSystemClassLoader(),
@@ -212,7 +211,7 @@ class TestClassExposer {
                 .noNestMate()
                 .make()
                 .getBytes();
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
                 .defineMakePublicPredicate(name::equals)
                 .transform(null,
                         ClassLoader.getSystemClassLoader(),
@@ -236,7 +235,7 @@ class TestClassExposer {
     @Test
     void unwantedClassIsIgnored() {
         var bytes = new byte[1];
-        var arr = new ClassExposer(bb, tempCodeLocator, () -> typePool, () -> locator)
+        var arr = new ClassExposer(bb, () -> typePool, () -> dummyLocator, () -> locator)
                 .transform(null, ClassLoader.getSystemClassLoader(), "unwanted", null, null, bytes);
         assertSame(bytes, arr);
     }

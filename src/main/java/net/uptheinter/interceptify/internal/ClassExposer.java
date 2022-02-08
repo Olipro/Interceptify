@@ -2,6 +2,7 @@ package net.uptheinter.interceptify.internal;
 
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.asm.ModifierAdjustment;
+import net.bytebuddy.asm.TypeReferenceAdjustment;
 import net.bytebuddy.description.field.FieldDescription;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.modifier.EnumerationState;
@@ -18,7 +19,7 @@ import net.bytebuddy.description.modifier.TypeManifestation;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.ClassFileLocator;
-import net.bytebuddy.pool.TypePool;
+import net.bytebuddy.dynamic.DynamicType;
 import net.uptheinter.interceptify.util.Boxed;
 
 import java.lang.instrument.ClassFileTransformer;
@@ -34,20 +35,20 @@ import static net.bytebuddy.matcher.ElementMatchers.is;
 
 class ClassExposer implements ClassFileTransformer {
     private final ByteBuddy byteBuddy;
-    private final TemporaryByteCodeLocator tempCodeLocator;
-    private final Supplier<TypePool> typePoolSupplier;
-    private final Supplier<ClassFileLocator> locatorSupplier;
+    private final Supplier<GranularTypePool> typePoolSupplier;
+    private final Supplier<ClassByteCodeLocator> locatorSupplier;
+    private final Supplier<ClassFileLocator> compoundSupplier;
     private Predicate<String> shouldMakePublic = s -> false;
     private Set<String> toMakePublic = new HashSet<>();
 
     public ClassExposer(ByteBuddy byteBuddy,
-                        TemporaryByteCodeLocator tempCodeLocator,
-                        Supplier<TypePool> typePoolSupplier,
-                        Supplier<ClassFileLocator> locatorSupplier) {
+                        Supplier<GranularTypePool> typePoolSupplier,
+                        Supplier<ClassByteCodeLocator> locatorSupplier,
+                        Supplier<ClassFileLocator> compoundLocator) {
         this.byteBuddy = byteBuddy;
-        this.tempCodeLocator = tempCodeLocator;
         this.typePoolSupplier = typePoolSupplier;
         this.locatorSupplier = locatorSupplier;
+        this.compoundSupplier = compoundLocator;
     }
 
     public ClassExposer defineMakePublicList(Set<String> toMakePublic) {
@@ -60,11 +61,23 @@ class ClassExposer implements ClassFileTransformer {
         return this;
     }
 
+    private void updateClass(String name, byte[] bytes) {
+        typePoolSupplier.get().removeFromCache(name);
+        locatorSupplier.get().put(name, bytes);
+    }
+
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+        className = className.replace('/', '.');
         if (!toMakePublic.contains(className) && !shouldMakePublic.test(className))
             return classfileBuffer;
-        return tempCodeLocator.with(className, classfileBuffer, () -> makeAllPublic(className));
+        updateClass(className, classfileBuffer);
+        var cls = typePoolSupplier.get().describe(className).resolve();
+        if (cls.isEnum()) // workaround for the enum visitor getting the raw name.
+            updateClass("L" + className + ";", classfileBuffer);
+        var transformed = makeAllPublic(cls);
+        updateClass(className, transformed);
+        return transformed;
     }
 
     @Override
@@ -118,14 +131,15 @@ class ClassExposer implements ClassFileTransformer {
             list.add(FieldManifestation.FINAL);
     }
 
+    @SuppressWarnings("unchecked")
     private <R extends ModifierContributor> List<R> getManifestation(FieldDescription obj, TypeDescription cls) {
         var ret = new ArrayList<ModifierContributor>(6);
         ret.add(Visibility.PUBLIC);
         applyModifiersFor(obj, cls, ret);
-        //noinspection unchecked
         return (List<R>) ret;
     }
 
+    @SuppressWarnings("unchecked")
     private <R extends ModifierContributor, T> List<R> getManifestation(T obj) {
         var ret = new ArrayList<ModifierContributor>(6);
         ret.add(Visibility.PUBLIC);
@@ -134,12 +148,15 @@ class ClassExposer implements ClassFileTransformer {
         } else if (obj instanceof MethodDescription) {
             applyModifiersFor((MethodDescription) obj, ret);
         }
-        //noinspection unchecked
         return (List<R>) ret;
     }
 
-    private byte[] makeAllPublic(String className) {
-        var cls = typePoolSupplier.get().describe(className).resolve();
+    private byte[] makeAllPublic(TypeDescription cls) {
+        return makeTypeDescPublic(cls, new Boxed<>(byteBuddy.redefine(cls, compoundSupplier.get())))
+                .get().make(typePoolSupplier.get()).getBytes().clone();
+    }
+
+    public Boxed<DynamicType.Builder<?>> makeTypeDescPublic(TypeDescription cls, Boxed<DynamicType.Builder<?>> typeBuilder) {
         var adjust = new Boxed<>(new ModifierAdjustment());
         adjust.run(builder -> builder.withTypeModifiers(getManifestation(cls)));
         cls.getDeclaredMethods().stream()
@@ -148,8 +165,6 @@ class ClassExposer implements ClassFileTransformer {
         cls.getDeclaredFields().stream()
                 .filter(field -> !field.isPublic() || field.isFinal())
                 .forEach(field -> adjust.run(builder -> builder.withFieldModifiers(is(field), getManifestation(field, cls))));
-        return byteBuddy.redefine(cls, locatorSupplier.get())
-                .visit(adjust.get())
-                .make().getBytes();
+        return typeBuilder.run(builder -> builder.visit(adjust.get()).visit(TypeReferenceAdjustment.strict()));
     }
 }
