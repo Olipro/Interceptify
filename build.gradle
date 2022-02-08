@@ -97,6 +97,10 @@ publishing {
     }
 }
 
+tasks.withType(Sign) {
+    onlyIf { System.getenv("OSSRH_KEY") != null }
+}
+
 signing {
     sign publishing.publications.mavenCentral
     useInMemoryPgpKeys(System.getenv("OSSRH_KEY"), System.getenv("OSSRH_KEYPASS"))

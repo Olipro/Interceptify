@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.io.FileOutputStream;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,8 +24,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import static net.bytebuddy.description.annotation.AnnotationDescription.Builder.ofType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -111,6 +108,7 @@ public class TestClassInjector {
     @Test
     void applyAnnotationsAndIntercept() throws Throwable {
         var jarFile = tmp.resolve("test.jar").toFile();
+        var jarFile2 = tmp.resolve("test2.jar").toFile();
         var target = bb.subclass(Object.class)
                 .name("foo.Interceptee")
                 .modifiers(Modifier.PUBLIC)
@@ -122,8 +120,8 @@ public class TestClassInjector {
                 .withParameter(int.class)
                 .intercept(MethodCall.invoke(to("construct", int.class)).withAllArguments().andThen(MethodCall.invoke(Object.class.getConstructor())))
                 .make();
-        var interceptee = target.getBytes();
-        var interceptor = bb.subclass(Object.class)
+        target.toJar(jarFile);
+        bb.subclass(Object.class)
                 .name("foo.Interceptor")
                 .modifiers(Modifier.PUBLIC)
 
@@ -140,22 +138,16 @@ public class TestClassInjector {
                 ).annotateMethod(ofType(OverwriteConstructor.class).build())
 
                 .annotateType(ofType(InterceptClass.class).define("value", "foo.Interceptee").build())
-                .make().getBytes();
-
-        try (var f = new FileOutputStream(jarFile);
-            var jar = new ZipOutputStream(f)) {
-            jar.putNextEntry(new ZipEntry("foo/Interceptor.class"));
-            jar.write(interceptor);
-            jar.putNextEntry(new ZipEntry("foo/Interceptee.class"));
-            jar.write(interceptee);
-        }
+                .make().toJar(jarFile2);
 
         classInjector = new ClassInjector(bb, mockInstr)
-                .setClassPath(new URL[]{jarFile.toURI().toURL()});
+                .setClassPath(new URL[]{jarFile.toURI().toURL(), jarFile2.toURI().toURL()});
         var jf = new JarFiles();
         jf.addFromDirectory(tmp);
-        classInjector.collectMetadataFrom(jf).applyAnnotationsAndIntercept();
-        var cls = Class.forName("foo.Interceptee");
+        classInjector
+                .collectMetadataFrom(jf)
+                .applyAnnotationsAndIntercept();
+        var cls = Class.forName("foo.Interceptee", true, ClassLoader.getSystemClassLoader());
         var inst = cls.getDeclaredConstructor(int.class).newInstance(5);
         var result = (int)cls.getDeclaredMethod("func", int.class)
                 .invoke(inst, 3);

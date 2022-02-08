@@ -2,6 +2,7 @@ package net.uptheinter.interceptify.internal;
 
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.ClassFileLocator;
+import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.DynamicType.Builder;
 import net.bytebuddy.dynamic.DynamicType.Unloaded;
 import net.bytebuddy.dynamic.TypeResolutionStrategy;
@@ -34,28 +35,23 @@ import static net.bytebuddy.matcher.ElementMatchers.namedOneOf;
 import static net.bytebuddy.matcher.ElementMatchers.takesGenericArguments;
 
 class ClassInjector {
-    private static final ClassLoader classLoader = ClassInjector.class.getClassLoader();
-
     private final ByteBuddy byteBuddy;
-    @SuppressWarnings({"unused", "FieldCanBeLocal"})
-    private final Instrumentation instr;
     private final ClassExposer classExposer;
     private final ClassByteCodeLocator byteCodeLocator = new ClassByteCodeLocator();
-    private final TemporaryByteCodeLocator tempCodeLocator = new TemporaryByteCodeLocator();
     private final List<ClassMetadata> classes = new ArrayList<>();
+    private final List<ClassMetadata> extraClasses = new ArrayList<>();
     private ClassFileLocator classFileLocator;
     private GranularTypePool typePool;
+    private final List<DynamicType.Unloaded<?>> defs = new ArrayList<>();
 
     public ClassInjector(ByteBuddy byteBuddy, Instrumentation instr) {
         this.byteBuddy = byteBuddy;
-        this.instr = instr;
-        this.classExposer = new ClassExposer(byteBuddy, tempCodeLocator, () -> typePool, () -> classFileLocator);
+        this.classExposer = new ClassExposer(byteBuddy, () -> typePool, () -> byteCodeLocator, () -> classFileLocator);
         instr.addTransformer(classExposer);
     }
 
     public ClassInjector setClassPath(URL[] classPath) {
         this.classFileLocator = new ClassFileLocator.Compound(
-                tempCodeLocator,
                 byteCodeLocator,
                 new ClassFileLocator.ForUrl(classPath),
                 ClassFileLocator.ForClassLoader.ofSystemLoader()
@@ -81,9 +77,16 @@ class ClassInjector {
                 .flatMap(Collection::stream)
                 .map(JarEntryEx::getClassName)
                 .map(this::getClassMetadata)
-                .filter(a -> a.hasAnnotation(InterceptClass.class))
+                .filter(this::filterUnannotated)
                 .forEach(classes::add);
         return this;
+    }
+
+    private boolean filterUnannotated(ClassMetadata cls) {
+        if (cls.hasAnnotation(InterceptClass.class))
+            return true;
+        extraClasses.add(cls);
+        return false;
     }
 
     private ClassMetadata getClassMetadata(String classFile) {
@@ -97,11 +100,23 @@ class ClassInjector {
                                 .computeIfAbsent(cls.getAnnotation(InterceptClass.class).value(),
                                         k -> new ArrayList<>())
                                 .add(cls), (a, b) -> {});
+        extraClasses.forEach(this::addExtra);
         interceptMap.entrySet()
                 .stream()
                 .map(this::applyInterceptTo)
-                .flatMap(this::loadInterceptee) // All interceptees are now loaded.
-                .forEach(this::loadInterceptor);
+                .flatMap(this::addInterceptee)
+                .forEach(this::addInterceptor);
+        if (!defs.isEmpty()) {
+            var first = new Boxed<DynamicType.Unloaded<?>>(defs.remove(defs.size() - 1));
+            defs.forEach(def -> first.run(it -> it.include(def)));
+            first.get().load(getClass().getClassLoader(), ClassLoadingStrategy.Default.INJECTION);
+        }
+    }
+
+    private void addExtra(ClassMetadata classMetadata) {
+        var unloaded = byteBuddy.redefine(classMetadata.getTypeDesc(), classFileLocator)
+                .make(new TypeResolutionStrategy.Active(), typePool);
+        defs.add(unloaded);
     }
 
     private InterceptPair applyInterceptTo(Map.Entry<String, List<ClassMetadata>> entry) {
@@ -118,7 +133,7 @@ class ClassInjector {
                 .collect(Collectors.toList());
         var unloadedInterceptee = intercepteeBuildBox
                 .get()
-                .make(new TypeResolutionStrategy.Active());
+                .make(new TypeResolutionStrategy.Active(), typePool);
         return new InterceptPair(unloadedInterceptee, unloadedInterceptors);
     }
 
@@ -213,12 +228,12 @@ class ClassInjector {
                 " has OverwriteConstructor with neither before or after == true");
     }
 
-    private Stream<Unloaded<?>> loadInterceptee(InterceptPair pair) {
-        pair.getInterceptee().load(classLoader, ClassLoadingStrategy.Default.INJECTION);
+    private Stream<DynamicType.Unloaded<?>> addInterceptee(InterceptPair pair) {
+        defs.add(pair.getInterceptee());
         return pair.getInterceptors().stream();
     }
 
-    private void loadInterceptor(Unloaded<?> interceptor) {
-        interceptor.load(classLoader, ClassLoadingStrategy.Default.INJECTION);
+    private void addInterceptor(DynamicType.Unloaded<?> interceptor) {
+        defs.add(interceptor);
     }
 }
