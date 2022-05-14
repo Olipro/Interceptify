@@ -115,7 +115,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'net.bytebuddy', name: 'byte-buddy', version: '1.12.7'
+    implementation group: 'net.bytebuddy', name: 'byte-buddy', version: '1.12.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '4.2.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'

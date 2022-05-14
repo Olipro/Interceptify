@@ -1,6 +1,7 @@
 package net.uptheinter.interceptify.internal;
 
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.MethodCall;
 import net.uptheinter.interceptify.annotations.InterceptClass;
 import net.uptheinter.interceptify.annotations.OverwriteConstructor;
@@ -91,14 +92,25 @@ public class TestClassInjector {
     }
 
     private static boolean success;
+    private static boolean success2 = true;
     @SuppressWarnings("unused")
     public static void constructIntercept(Object inst, int a) {
         success = true;
     }
 
     @SuppressWarnings("unused")
+    public static void constructIntercept(String a) {
+        success2 = false;
+    }
+
+    @SuppressWarnings("unused")
     public static void construct(int a) {
         success = false;
+    }
+
+    @SuppressWarnings("unused")
+    public static void construct(String a) {
+        success2 = !success2;
     }
 
     private Method to(String name, Class<?>... args) throws NoSuchMethodException {
@@ -109,7 +121,7 @@ public class TestClassInjector {
     void applyAnnotationsAndIntercept() throws Throwable {
         var jarFile = tmp.resolve("test.jar").toFile();
         var jarFile2 = tmp.resolve("test2.jar").toFile();
-        var target = bb.subclass(Object.class)
+        var target = bb.subclass(Object.class, ConstructorStrategy.Default.NO_CONSTRUCTORS)
                 .name("foo.Interceptee")
                 .modifiers(Modifier.PUBLIC)
                 .defineMethod("func", int.class, Modifier.PUBLIC)
@@ -119,6 +131,10 @@ public class TestClassInjector {
                 .defineConstructor(Modifier.PUBLIC)
                 .withParameter(int.class)
                 .intercept(MethodCall.invoke(to("construct", int.class)).withAllArguments().andThen(MethodCall.invoke(Object.class.getConstructor())))
+
+                .defineConstructor(Modifier.PUBLIC)
+                .withParameter(String.class)
+                .intercept(MethodCall.invoke(to("construct", String.class)).withAllArguments().andThen(MethodCall.invoke(Object.class.getConstructor())))
                 .make();
         target.toJar(jarFile);
         bb.subclass(Object.class)
@@ -128,14 +144,19 @@ public class TestClassInjector {
                 .defineMethod("intercept", int.class, Modifier.PUBLIC | Modifier.STATIC)
                 .withParameter(target.getTypeDescription()).withParameter(Method.class).withParameter(int.class)
                 .intercept(MethodCall.invoke(
-                        to("interceptor", Object.class, Method.class, int.class)).withAllArguments()
-                ).annotateMethod(ofType(OverwriteMethod.class).define("value", "func").build())
+                        to("interceptor", Object.class, Method.class, int.class)).withAllArguments())
+                .annotateMethod(ofType(OverwriteMethod.class).define("value", "func").build())
 
                 .defineMethod("construct", void.class, Modifier.PUBLIC | Modifier.STATIC)
                 .withParameter(target.getTypeDescription()).withParameter(int.class)
                 .intercept(MethodCall.invoke(
-                        to("constructIntercept", Object.class, int.class)).withAllArguments()
-                ).annotateMethod(ofType(OverwriteConstructor.class).build())
+                        to("constructIntercept", Object.class, int.class)).withAllArguments())
+                .annotateMethod(ofType(OverwriteConstructor.class).build())
+
+                .defineMethod("construct", void.class, Modifier.PUBLIC | Modifier.STATIC)
+                .withParameter(String.class)
+                .intercept(MethodCall.invoke(to("constructIntercept", String.class)).withAllArguments())
+                .annotateMethod(ofType(OverwriteConstructor.class).define("before", true).define("after", false).build())
 
                 .annotateType(ofType(InterceptClass.class).define("value", "foo.Interceptee").build())
                 .make().toJar(jarFile2);
@@ -151,8 +172,10 @@ public class TestClassInjector {
         var inst = cls.getDeclaredConstructor(int.class).newInstance(5);
         var result = (int)cls.getDeclaredMethod("func", int.class)
                 .invoke(inst, 3);
+        cls.getDeclaredConstructor(String.class).newInstance("");
         assertEquals(8, result);
         assertTrue(success);
+        assertTrue(success2);
     }
 
     @Test

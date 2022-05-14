@@ -73,8 +73,6 @@ class ClassExposer implements ClassFileTransformer {
             return classfileBuffer;
         updateClass(className, classfileBuffer);
         var cls = typePoolSupplier.get().describe(className).resolve();
-        if (cls.isEnum()) // workaround for the enum visitor getting the raw name.
-            updateClass("L" + className + ";", classfileBuffer);
         var transformed = makeAllPublic(cls);
         updateClass(className, transformed);
         return transformed;
