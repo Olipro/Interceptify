@@ -7,6 +7,7 @@ import java.util.List;
 
 class ParamsValidator {
     private static final String METHODTYPENAME = Method.class.getTypeName();
+    private static final Object OBJECTTYPENAME = Object.class.getTypeName();
     private final MethodMetadata method;
     private final List<ParameterMetadata> params;
     private final ClassMetadata targetedCls;
@@ -38,7 +39,8 @@ class ParamsValidator {
 
     private int validateInstanceMethod(ClassMetadata targetedCls, List<?> otherParams) {
         return (params.size() - 2 != otherParams.size() ||
-                !params.get(0).getTypeName().equals(targetedCls.getTypeName()) ||
+                !(params.get(0).getTypeName().equals(targetedCls.getTypeName()) ||
+                  params.get(0).getTypeName().equals(OBJECTTYPENAME)) ||
                 !params.get(1).getTypeName().equals(METHODTYPENAME)) ? -1 : 2;
     }
 

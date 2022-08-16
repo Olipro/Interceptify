@@ -25,6 +25,9 @@ class TestParamsValidator {
         static void Good3(int c, char d) {}
         static void Chek3(int c, char d) {}
 
+        static void Good4(Object a, Method b, String c, float d) {}
+        void Chek4(String c, float d) {}
+
         void Bad1(TestMe a, Method b, int c) {}
         void Chk1(int c) {}
 
@@ -75,6 +78,7 @@ class TestParamsValidator {
         assertTrue(new ParamsValidator(getMethod(cls, "Good1"), cm).isCompatible(getMethod(cls, "Chek1")));
         assertTrue(new ParamsValidator(getMethod(cls, "Good2"), cm).isCompatible(getMethod(cls, "Chek2")));
         assertTrue(new ParamsValidator(getMethod(cls, "Good3"), cm).isCompatible(getMethod(cls, "Chek3")));
+        assertTrue(new ParamsValidator(getMethod(cls, "Good4"), cm).isCompatible(getMethod(cls, "Chek4")));
 
         assertFalse(new ParamsValidator(getMethod(cls, "Bad1"), cm).isCompatible(getMethod(cls, "Chk1")));
         assertFalse(new ParamsValidator(getMethod(cls, "Bad2"), cm).isCompatible(getMethod(cls, "Chk2")));
