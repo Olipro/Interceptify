@@ -24,21 +24,25 @@ class TestParamsAnnotator {
         public static void interceptor(ToAnnotate a, Method b, int c, String d) {}
         @SuppressWarnings("EmptyMethod")
         public void interceptee(int a, String b) {}
+
+        @SuppressWarnings("EmptyMethod")
+        public static void interceptor2(Object a, Method b, int c, float d) {}
+        @SuppressWarnings("EmptyMethod")
+        public void interceptee2(int a, float b) {}
     }
 
-    @Test
-    void annotate() {
+    private void testByName(String strInterceptor, String strInterceptee) {
         var bb = new ByteBuddy();
         var box = new Boxed<DynamicType.Builder<?>>(bb.redefine(ToAnnotate.class));
         var toAnnotate = TypePool.Default.ofSystemLoader().describe(ToAnnotate.class.getName()).resolve();
         var interceptor = toAnnotate.getDeclaredMethods()
                 .stream()
-                .filter(m -> "interceptor".equals(m.getName()))
+                .filter(m -> strInterceptor.equals(m.getName()))
                 .map(MethodMetadata::new)
                 .findAny().orElseThrow();
         var interceptee = toAnnotate.getDeclaredMethods()
                 .stream()
-                .filter(m -> "interceptee".equals(m.getName()))
+                .filter(m -> strInterceptee.equals(m.getName()))
                 .map(MethodMetadata::new)
                 .findAny().orElseThrow();
         new ParamsAnnotator(box, interceptor, interceptee).annotate();
@@ -48,7 +52,7 @@ class TestParamsAnnotator {
         var cls = TypePool.Default.of(cfl).describe(ToAnnotate.class.getName()).resolve();
         var p = cls.getDeclaredMethods()
                 .stream()
-                .filter(i -> "interceptor".equals(i.getName()))
+                .filter(i -> strInterceptor.equals(i.getName()))
                 .findAny().orElseThrow().getParameters();
         assertEquals(4, p.size());
         assertTrue(p.get(0).getDeclaredAnnotations().get(0).getAnnotationType().represents(RuntimeType.class));
@@ -59,6 +63,11 @@ class TestParamsAnnotator {
             assertTrue(arg1.getAnnotationType().represents(Argument.class));
             assertEquals(i, (int) arg1.getValue("value").resolve());
         }
+    }
 
+    @Test
+    void annotate() {
+        testByName("interceptor", "interceptee");
+        testByName("interceptor2", "interceptee2");
     }
 }

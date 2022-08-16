@@ -15,6 +15,7 @@ import static net.bytebuddy.matcher.ElementMatchers.is;
 
 class ParamsAnnotator {
     private static final String METHODTYPENAME = Method.class.getTypeName();
+    private static final String OBJECTTYPENAME = Object.class.getTypeName();
     private final Boxed<DynamicType.Builder<?>> builderBox;
     private final MethodMetadata method;
     private final MethodMetadata targetMethod;
@@ -38,7 +39,9 @@ class ParamsAnnotator {
     }
 
     private boolean isForThisInstance(ParameterMetadata param) {
-        if (paramIdx != 0 || !param.getTypeName().equals(targetMethod.getDeclaringType().getTypeName()))
+        if (paramIdx != 0 || targetMethod.isStatic() ||
+                !(param.getTypeName().equals(targetMethod.getDeclaringType().getTypeName()) ||
+                  param.getTypeName().equals(OBJECTTYPENAME)))
             return false;
         builderBox.run(builder -> builder.visit(new ForMethod()
                 .annotateParameter(paramIdx++,
